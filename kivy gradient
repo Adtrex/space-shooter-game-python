@@ -1,0 +1,52 @@
+from kivy.app import App
+from kivy.uix.floatlayout import FloatLayout
+from kivy.graphics import Rectangle, Color
+from kivy.core.window import Window
+import numpy as np
+from kivy.graphics.texture import Texture
+
+class GradientBackground(FloatLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.create_gradient()
+
+    def create_gradient(self):
+        """Creates a 45-degree gradient texture and applies it as a background."""
+        width, height = Window.size
+        size = max(width, height)  # Ensure the texture covers the screen
+        data = np.zeros((size, size, 3), dtype=np.uint8)
+
+        # Define gradient colors (blue to pink)
+        start_color = np.array([0, 102, 255])  # Blue
+        end_color = np.array([255, 0, 127])  # Pink
+
+        # Generate diagonal gradient
+        for i in range(size):
+            factor = i / size
+            color = (1 - factor) * start_color + factor * end_color
+            data[i, :, :] = color.astype(np.uint8)
+
+        # Create Kivy texture
+        texture = Texture.create(size=(size, size))
+        texture.blit_buffer(data.tobytes(), colorfmt='rgb', bufferfmt='ubyte')
+        texture.flip_vertical()
+
+        with self.canvas:
+            Color(1, 1, 1, 1)
+            self.bg_rect = Rectangle(texture=texture, pos=self.pos, size=self.size)
+
+        self.bind(size=self.update_bg, pos=self.update_bg)
+
+    def update_bg(self, *args):
+        """Updates the background size and position."""
+        self.bg_rect.pos = self.pos
+        self.bg_rect.size = self.size
+
+
+class GradientApp(App):
+    def build(self):
+        return GradientBackground()
+
+
+if __name__ == "__main__":
+    GradientApp().run()

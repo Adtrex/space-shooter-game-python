@@ -1,0 +1,11 @@
+<GradientBackground>:
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, 1  # White base
+        Rectangle:
+            size: self.size
+            pos: self.pos
+            texture: self.gradient_texture
+
+<MainWidget>:
+    GradientBackground:
