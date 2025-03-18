@@ -324,10 +324,16 @@ class ShootGame(FloatLayout):
     
     def end_game(self):
         global time_left
-        winner_text = f"Score: {self.score1}" if self.mode == 1 else (
+        winner_text = (
+            f"Score: {self.score1}\nNew High Score!" if self.score1 > self.get_highest_score() else 
+            f"Score: {self.score1}\nHighest Score: {self.get_highest_score()}"
+        ) if self.mode == 1 else (
             "Player 1 Wins!" if self.score1 > self.score2 else
             "Player 2 Wins!" if self.score2 > self.score1 else "It's a Tie!"
         )
+
+        self.save_score()
+        
         self.add_widget(Label(text=winner_text, size_hint=(None, None), pos=(220, 250)))
         Clock.unschedule(self.update)
         Clock.unschedule(self.update_timer)
@@ -342,6 +348,37 @@ class ShootGame(FloatLayout):
         restart_button.bind(on_press=self.restart_game)
         self.add_widget(restart_button)
         time_left = 30
+
+    def save_score(self):
+        if current_user:
+            print(current_user)
+            ref = db.reference(f'users/{current_user}/games').push()
+            ref.set({
+                'score': self.score1 if self.mode == 1 else {'player1': self.score1, 'player2': self.score2},
+                'mode': self.mode
+            })
+
+            print(json.dumps(self.score1))
+
+    def get_highest_score(self):
+        ref = db.reference(f'users/{current_user}/games')
+        scores = ref.get()
+
+       ## print(ref.get())
+
+        if not scores:
+            return None  # No scores found
+
+        highest_score = 0
+
+        for game in scores.values():
+            if isinstance(game, dict) and 'mode' in game and 'score' in game:  # Ensure valid data
+                if game['mode'] == 1:
+                    highest_score = max(highest_score, game['score'])
+                else:
+                    highest_score = max(highest_score, game['score'].get('player1', 0), game['score'].get('player2', 0))
+
+        return highest_score
     
     def restart_game(self, instance):
         from kivy.app import App
