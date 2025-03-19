@@ -49,7 +49,7 @@ time_left = 30
 current_user = None
 
 class GradientBackground(FloatLayout):
-    #Creates a 45° gradient background that covers the entire window.
+    # Creates a 45° gradient background that covers the entire window.
     def __init__(self, **kwargs):
         super(GradientBackground, self).__init__(**kwargs)
         # Initially set to Window size; will update later via on_size.
@@ -97,7 +97,7 @@ class GradientBackground(FloatLayout):
         self.create_gradient()
 
 class LoginScreen(FloatLayout):
-   # User login and registration screen with centered, wider text boxes.
+    # User login and registration screen with centered, wider text boxes.
     def __init__(self, switch_callback, **kwargs):
         super(LoginScreen, self).__init__(**kwargs)
         self.switch_callback = switch_callback
@@ -173,18 +173,18 @@ class LoginScreen(FloatLayout):
             print("Registration failed:", e)
 
 class ModeSelection(FloatLayout):
-    #Screen for selecting game mode with centered buttons.
+    # Screen for selecting game mode with centered buttons.
     def __init__(self, start_game_callback, **kwargs):
         super(ModeSelection, self).__init__(**kwargs)
         self.start_game_callback = start_game_callback
-        
+
         self.add_widget(GradientBackground())
-        
+
         self.single_player_button = Button(
             text="Single Player",
             size_hint=(None, None),
             size=(200, 50),
-            pos_hint={'center_x': 0.5, 'center_y': 0.6},
+            pos_hint={'center_x': 0.5, 'center_y': 0.7},
             background_normal='',
             background_color=(19/255, 40/255, 77/255, 1)
         )
@@ -196,23 +196,45 @@ class ModeSelection(FloatLayout):
             background_normal='',
             background_color=(19/255, 40/255, 77/255, 1)
         )
-        
+        self.score_board_button = Button(
+            text="Score Board",
+            size_hint=(None, None),
+            size=(200, 50),
+            pos_hint={'center_x': 0.5, 'center_y': 0.3},
+            background_normal='',
+            background_color=(19/255, 40/255, 77/255, 1)
+        )
+
         self.single_player_button.bind(on_press=lambda x: self.start_game(1))
         self.multi_player_button.bind(on_press=lambda x: self.start_game(2))
-        
+        self.score_board_button.bind(on_press=lambda x: self.start_game(3))
+
         self.add_widget(self.single_player_button)
         self.add_widget(self.multi_player_button)
-        
+        self.add_widget(self.score_board_button)
+
     def start_game(self, mode):
         self.start_game_callback(mode)
 
 class ShootGame(FloatLayout):
-    #Main shooting game logic with gradient background and keyboard handling.
+    # Main shooting game logic with gradient background and keyboard handling.
     def __init__(self, mode, **kwargs):
         super(ShootGame, self).__init__(**kwargs)
         self.mode = mode
         
         self.add_widget(GradientBackground())
+        
+        # Create a back button on the top left.
+        back_button = Button(
+            text="Back",
+            size_hint=(None, None),
+            size=(100, 50),
+            pos_hint={'x': 0, 'top': 1},
+            background_normal='',
+            background_color=(19/255, 40/255, 77/255, 1)
+        )
+        back_button.bind(on_press=self.back_to_mode_selection)
+        self.add_widget(back_button)
         
         # Request keyboard events.
         self._keyboard = Window.request_keyboard(self.on_keyboard_closed, self)
@@ -244,6 +266,19 @@ class ShootGame(FloatLayout):
         
         Clock.schedule_interval(self.update, 1/120)
         Clock.schedule_interval(self.update_timer, 1)
+    
+    def back_to_mode_selection(self, instance):
+        # Unschedule ongoing tasks.
+        Clock.unschedule(self.update)
+        Clock.unschedule(self.update_timer)
+        # Unbind the keyboard.
+        if self._keyboard:
+            self._keyboard.unbind(on_key_down=self.on_key_down)
+            self._keyboard.unbind(on_key_up=self.on_key_up)
+            self._keyboard = None
+        # Navigate back to the mode selection screen.
+        from kivy.app import App
+        App.get_running_app().show_mode_selection()
     
     def on_keyboard_closed(self):
         if self._keyboard:
@@ -324,10 +359,16 @@ class ShootGame(FloatLayout):
     
     def end_game(self):
         global time_left
-        winner_text = f"Score: {self.score1}" if self.mode == 1 else (
+        winner_text = (
+            f"Score: {self.score1}\nNew High Score!" if self.score1 > self.get_highest_score() else 
+            f"Score: {self.score1}\nHighest Score: {self.get_highest_score()}"
+        ) if self.mode == 1 else (
             "Player 1 Wins!" if self.score1 > self.score2 else
             "Player 2 Wins!" if self.score2 > self.score1 else "It's a Tie!"
         )
+
+        self.save_score()
+        
         self.add_widget(Label(text=winner_text, size_hint=(None, None), pos=(220, 250)))
         Clock.unschedule(self.update)
         Clock.unschedule(self.update_timer)
@@ -342,10 +383,91 @@ class ShootGame(FloatLayout):
         restart_button.bind(on_press=self.restart_game)
         self.add_widget(restart_button)
         time_left = 30
-    
+
+    def save_score(self):
+        if current_user:
+            print(current_user)
+            ref = db.reference(f'users/{current_user}/games').push()
+            ref.set({
+                'score': self.score1 if self.mode == 1 else {'player1': self.score1, 'player2': self.score2},
+                'mode': self.mode
+            })
+            print(json.dumps(self.score1))
+
+    def get_highest_score(self):
+        ref = db.reference(f'users/{current_user}/games')
+        scores = ref.get()
+        if not scores:
+            return 0  # Return 0 when there are no scores
+
+        highest_score = 0
+        for game in scores.values():
+            if isinstance(game, dict) and 'mode' in game and 'score' in game:
+                if game['mode'] == 1:
+                    highest_score = max(highest_score, game['score'])
+                else:
+                    highest_score = max(
+                        highest_score,
+                        game['score'].get('player1', 0),
+                        game['score'].get('player2', 0)
+                    )
+        return highest_score
+
     def restart_game(self, instance):
         from kivy.app import App
         App.get_running_app().show_mode_selection()
+
+class ScoreBoardScreen(FloatLayout):
+    # Screen that displays the saved scores for the current user.
+    def __init__(self, switch_callback, **kwargs):
+        super(ScoreBoardScreen, self).__init__(**kwargs)
+        self.switch_callback = switch_callback
+
+        self.add_widget(GradientBackground())
+
+        # Label to display scores
+        self.score_label = Label(
+            text="Loading scores...",
+            size_hint=(None, None),
+            size=(400, 300),
+            pos_hint={'center_x': 0.5, 'center_y': 0.6}
+        )
+        self.add_widget(self.score_label)
+
+        # Back button to return to the mode selection
+        back_button = Button(
+            text="Back",
+            size_hint=(None, None),
+            size=(200, 50),
+            pos_hint={'center_x': 0.5, 'center_y': 0.2},
+            background_normal='',
+            background_color=(19/255, 40/255, 77/255, 1)
+        )
+        back_button.bind(on_press=lambda x: self.switch_callback())
+        self.add_widget(back_button)
+
+        # Load scores when the screen is created.
+        self.load_scores()
+
+    def load_scores(self):
+        if current_user:
+            ref = db.reference(f'users/{current_user}/games')
+            scores = ref.get()
+            score_text = "Score Board:\n"
+            if scores:
+                for game_id, game in scores.items():
+                    if game['mode'] == 1:
+                        score_text += f"Single Player: {game['score']}\n"
+                    else:
+                        # For two-player games, display both players’ scores.
+                        player1_score = game['score'].get('player1', 0)
+                        player2_score = game['score'].get('player2', 0)
+                        score_text += f"Two Players: {player1_score} - {player2_score}\n"
+            else:
+                score_text += "No scores recorded."
+            self.score_label.text = score_text
+        else:
+            self.score_label.text = "No user logged in."
 
 class GameApp(App):
     def build(self):
@@ -354,14 +476,18 @@ class GameApp(App):
         self.login_screen = LoginScreen(self.show_mode_selection)
         self.root_widget.add_widget(self.login_screen)
         return self.root_widget
-    
+
     def show_mode_selection(self):
         self.root_widget.clear_widgets()
         self.root_widget.add_widget(ModeSelection(self.start_game))
-    
-    def start_game(self, mode):
+
+    def start_game(self, mode): 
         self.root_widget.clear_widgets()
-        self.root_widget.add_widget(ShootGame(mode))
+        # If mode 3 was selected (Score Board), show the ScoreBoardScreen.
+        if mode == 3:
+            self.root_widget.add_widget(ScoreBoardScreen(self.show_mode_selection))
+        else:
+            self.root_widget.add_widget(ShootGame(mode))
 
 if __name__ == '__main__':
     GameApp().run()
