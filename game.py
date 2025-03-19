@@ -55,7 +55,7 @@ class GradientBackground(FloatLayout):
         # Initially set to Window size; will update later via on_size.
         self.size = Window.size
         self.pos = (0, 0)
-        self.disabled = True  # So it doesn't intercept input
+        self.disabled = True  
         with self.canvas:
             Color(1, 1, 1, 1)
             self.bg_rect = Rectangle(pos=self.pos, size=self.size)
